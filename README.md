@@ -1,2 +1,4 @@
 # MIGU-Flume-Hbase-Rowkey-Phoenix
 Flume写入Hbase数据库，按照Phoenix编码的rowkey自定义生成rowkey使写入hbase后可被Phoenix查询到
+
+项目只有一个类，只需下载pom文件即可，打包后放到flume的lib文件夹，并在sink的配置文件中指定使用的类
