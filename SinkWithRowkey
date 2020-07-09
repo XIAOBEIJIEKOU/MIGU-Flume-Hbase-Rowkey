@@ -1,0 +1,108 @@
+package cn.migu;
+
+import org.apache.flume.Context;
+import org.apache.flume.Event;
+import org.apache.flume.conf.ComponentConfiguration;
+import org.apache.flume.sink.hbase.HbaseEventSerializer;
+import org.apache.hadoop.hbase.client.Increment;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Row;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class RowkeyCreater implements HbaseEventSerializer {
+
+    private static final Logger logger = LoggerFactory.getLogger(RowkeyCreater.class);
+
+    private byte[] columnFamily;
+
+    private Event currentEvent;
+
+    public void initialize(Event event, byte[] bytes) {
+        this.columnFamily = bytes;
+        this.currentEvent = event;
+    }
+
+    public List<Row> getActions() {
+        // 切分 currentEvent文件 从中拿到的值
+        String eventStr = new String(currentEvent.getBody());
+        logger.info("eventStr={}",eventStr);
+
+        try{
+            //body格式
+            String appId = eventStr.split(",")[0];
+            String deviceId = eventStr.split(",")[1];
+            String token = eventStr.split(",")[2];
+            String token_new = eventStr.split(",")[3];
+            String event = eventStr.split(",")[4];
+            String timeStamp = eventStr.split(",")[5];
+
+            //生成rowkey
+            /*hbase编码rowkey规则：
+            public static String toStringBinary(byte[] b, int off, int len) {
+                StringBuilder result = new StringBuilder();
+                if (off >= b.length) {
+                    return result.toString();
+                } else {
+                    if (off + len > b.length) {
+                        len = b.length - off;
+                    }
+
+                    for(int i = off; i < off + len; ++i) {
+                        int ch = b[i] & 255;
+                        if ((ch < 48 || ch > 57) && (ch < 65 || ch > 90)
+                          && (ch < 97 || ch > 122) && " `~!@#$%^&*()-_=+[]{}|;:'\",.<>/?".indexOf(ch) < 0) {
+                            result.append(String.format("\\x%02X", ch));
+                        } else {
+                            result.append((char)ch);
+                        }
+                    }
+
+                    return result.toString();
+                }
+                }
+             */
+
+            String splitByte = "\0";
+            byte[] currentRowKey = (appId+splitByte+deviceId+splitByte+timeStamp).getBytes();
+
+            //hbase的put操作
+            List<Row> rows = new ArrayList<Row>();
+            Put row = new Put(currentRowKey);
+            //列族，单元格修饰名（可指定），值
+            //column=columnFamily:column,value=""
+            row.addColumn(columnFamily,  "APP_ID".getBytes(), appId.getBytes());
+            row.addColumn(columnFamily,  "DEVICE_ID".getBytes(), deviceId.getBytes());
+            row.addColumn(columnFamily,  "TIME_STAMP".getBytes(), timeStamp.getBytes());
+            row.addColumn(columnFamily,  "TOKEN".getBytes(), token.getBytes());
+            row.addColumn(columnFamily,  "TOKEN_NEW".getBytes(), token_new.getBytes());
+            row.addColumn(columnFamily,  "EVENT".getBytes(), event.getBytes());
+            rows.add(row);
+            return rows;
+        }catch (ArrayIndexOutOfBoundsException e){
+            logger.error("wrong eventStr={}",eventStr);
+        }
+        return null;
+    }
+
+    public List<Increment> getIncrements() {
+        List<Increment> incs = new ArrayList<Increment>();
+        return incs;
+    }
+
+    public void close() {
+        columnFamily = null;
+        currentEvent = null;
+    }
+
+    public void configure(ComponentConfiguration componentConfiguration) {
+
+    }
+
+    public void configure(Context context) {
+
+    }
+}
